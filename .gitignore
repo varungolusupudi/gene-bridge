@@ -1,0 +1,16 @@
+# Ignore WebStorm and VS Code settings
+.idea/
+.vscode/
+
+# Ignore dependencies
+node_modules/
+backend/__pycache__/
+backend/env/
+backend/.venv/
+
+# Ignore compiled files
+*.pyc
+.DS_Store
+
+# Ignore logs & temporary files
+*.log
