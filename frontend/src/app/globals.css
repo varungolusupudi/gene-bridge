@@ -3,19 +3,125 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-text-gradient: linear-gradient(129.03deg, #d2ceff 10%, #dfdcff 27%, #a69eff 100%);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/*@media (prefers-color-scheme: dark) {*/
+/*  :root {*/
+/*    --background: #0a0a0a;*/
+/*    --foreground: #ededed;*/
+/*  }*/
+/*}*/
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.hero-title {
+  -webkit-text-fill-color: transparent;
+  background: var(--color-text-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  display: inline-block; /* Ensures full rendering */
+  line-height: 1.2; /* Adjust if necessary */
+  font-size: 8rem; /* Keep the font size large */
+}
+
+.cta-button:hover {
+  transform: scale(1.05);
+}
+
+.decorative-circle {
+  box-shadow: 0 0 20px rgba(138, 43, 226, 0.3);
+}
+
+.smooth-wrapper {
+  overflow: hidden;
+  position: fixed;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-text-gradient: linear-gradient(129.03deg, #d2ceff 10%, #dfdcff 27%, #a69eff 100%);
+}
+
+/*@media (prefers-color-scheme: dark) {*/
+/*  :root {*/
+/*    --background: #0a0a0a;*/
+/*    --foreground: #ededed;*/
+/*  }*/
+/*}*/
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.hero-title {
+  -webkit-text-fill-color: transparent;
+  background: var(--color-text-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  display: inline-block; /* Ensures full rendering */
+  line-height: 1.2; /* Adjust if necessary */
+  font-size: 8rem; /* Keep the font size large */
+}
+
+.cta-button:hover {
+  transform: scale(1.05);
+}
+
+.decorative-circle {
+  box-shadow: 0 0 20px rgba(138, 43, 226, 0.3);
+}
+
+.smooth-wrapper {
+  overflow: hidden;
+  position: fixed;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.smooth-content {
+  min-height: 100vh;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.process-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.process-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.smooth-content {
+  min-height: 100vh;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.process-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.process-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

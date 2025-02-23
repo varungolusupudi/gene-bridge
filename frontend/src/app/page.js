@@ -1,101 +1,118 @@
-import Image from "next/image";
+'use client';
+import { useEffect, useRef, useState } from 'react';
+import gsap from 'gsap-trial';
+import ScrollTrigger from 'gsap-trial/ScrollTrigger';
+import ScrollSmoother from 'gsap-trial/ScrollSmoother';
+import { SplitText } from 'gsap-trial/SplitText';
+import Hero from './components/Hero';
+import Process from './components/Process';
+import Upload from './components/Upload';
+import AnalysisDashboard from "@/app/components/AnalysisDashboard";
+import AdditionalSections from "@/app/components/AdditionalSections";
+
+gsap.registerPlugin(ScrollTrigger, ScrollSmoother, SplitText);
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    const [isDark, setIsDark] = useState(true);
+    const [hasUploaded, setHasUploaded] = useState(false);
+    const smoothWrapperRef = useRef(null);
+    const smoothContentRef = useRef(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    useEffect(() => {
+        // Initialize global smooth scrolling
+        const smoother = ScrollSmoother.create({
+            wrapper: smoothWrapperRef.current,
+            content: smoothContentRef.current,
+            smooth: 1,
+            effects: true
+        });
+
+        // Global animations (Upload fade-in, Analysis blur, etc.)
+        const ctx = gsap.context(() => {
+            // Animate the Upload section to fade in
+            gsap.from(".upload-section", {
+                scrollTrigger: {
+                    trigger: ".upload-section",
+                    start: "top center",
+                    toggleActions: "play none none reverse"
+                },
+                y: 100,
+                opacity: 0,
+                duration: 1
+            });
+
+            // If not uploaded, blur the Analysis section
+            if (!hasUploaded) {
+                const blurTl = gsap.timeline({
+                    scrollTrigger: {
+                        trigger: ".analysis-section",
+                        start: "top center",
+                        toggleActions: "play none none reverse"
+                    }
+                });
+                blurTl.to(".analysis-blur", {
+                    backdropFilter: "blur(10px)",
+                    backgroundColor: isDark ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.3)",
+                    duration: 0.5
+                });
+            }
+        });
+
+        return () => {
+            smoother.kill();
+            ctx.revert();
+        };
+    }, [isDark, hasUploaded]);
+
+    return (
+        <div ref={smoothWrapperRef} className="smooth-wrapper">
+            <div ref={smoothContentRef} className="smooth-content">
+                <main className={`min-h-screen ${isDark ? 'bg-black' : 'bg-gray-50'} transition-colors duration-700`}>
+                    {/* Dark Mode Toggle */}
+                    <button
+                        onClick={() => setIsDark(!isDark)}
+                        className="fixed top-8 right-8 z-50 p-2 rounded-full bg-purple-500/20 hover:bg-purple-500/30 transition-all duration-300"
+                    >
+                        <span className="block w-6 h-6">{isDark ? '🌙' : '☀️'}</span>
+                    </button>
+
+                    {/* Hero Section */}
+                    <section className="hero-section">
+                        <Hero
+                            isDark={isDark}
+                            onGetStarted={() => {
+                                ScrollSmoother.get().scrollTo(".process-section", true);
+                            }}
+                        />
+                    </section>
+
+                    {/* Process Section */}
+                    <section className="process-section">
+                        <Process isDark={isDark} />
+                    </section>
+
+                    {/* Upload Section */}
+                    <section className="upload-section min-h-screen py-20">
+                        <div className="container mx-auto px-4 max-w-4xl" data-speed="0.9">
+                            <div className={`rounded-2xl p-12 backdrop-blur-sm ${isDark ? 'bg-white/5' : 'bg-white/80'}`}>
+                                <Upload
+                                    isDark={isDark}
+                                    onComplete={() => {
+                                        setHasUploaded(true);
+                                        ScrollSmoother.get().scrollTo(".analysis-section", true);
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Analysis Section */}
+                    <AnalysisDashboard isDark={isDark} hasUploaded={hasUploaded} />
+
+                    <AdditionalSections isDark={isDark} />
+
+                </main>
+            </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+    );
 }
