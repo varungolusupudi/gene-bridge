@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
 import pickle
-from sklearn.preprocessing import LabelEncoder, MinMaxScaler
+from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score
 from openai import OpenAI
 
@@ -19,10 +19,10 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-with open("her2_status_model.pkl", "rb") as f:
+with open("cancer_subtype_model.pkl", "rb") as f:
     model = pickle.load(f)
 
-def preprocess_data(df, target_column="her2_status", ancestry_column="ancestry"):
+def preprocess_data(df, target_column="cancer_subtype", ancestry_column="ancestry"):
     df = df.dropna(subset=[target_column])
     if "race" in df.columns and ancestry_column not in df.columns:
         df[ancestry_column] = df["race"]
@@ -40,29 +40,25 @@ def preprocess_data(df, target_column="her2_status", ancestry_column="ancestry")
 
     if target_column in df.columns:
         df[target_column] = encode_column(target_column)
-    if "brca1" in df.columns and "brca2" in df.columns:
-        scaler = MinMaxScaler()
-        df[["brca1", "brca2"]] = scaler.fit_transform(df[["brca1", "brca2"]].fillna(0))  # Fill NaN with 0 for bias
     if ancestry_column in df.columns:
         df[ancestry_column] = encode_column(ancestry_column)
+    if "EGFR_mutation_status" in df.columns and "KRAS_mutation_status" in df.columns:
+        df[["EGFR_mutation_status", "KRAS_mutation_status"]] = df[["EGFR_mutation_status", "KRAS_mutation_status"]].fillna(0)  # Fill NaN for bias
 
-    return df[[target_column, "brca1", "brca2", ancestry_column]], original_race
+    return df[[target_column, "EGFR_mutation_status", "KRAS_mutation_status", ancestry_column]], original_race
 
-def get_insights_from_llm(data, X_mean, is_biased):
-    benchmark_accuracy = 0.85
-    guideline = "HER2-positive breast cancer has a 20% recurrence rate per ASCO guidelines—regular follow-ups recommended."
+def get_insights_from_llm(data, is_biased):
+    benchmark_accuracy = 0.82
+    guideline = "Lung cancer subtypes guide treatment—ASCO recommends molecular testing for EGFR/KRAS."
 
     prompt = f"""
-    Given the following genetic risk analysis data for HER2-positive breast cancer:
+    Given the following genetic risk analysis data for lung cancer subtypes:
 
-    - Risk Score: {data['risk_score']}
-    - Risk Label: {data['risk_label']}
+    - Predicted Subtype Distribution: {data['subtype_distribution']}
     - Disparity Index: {data['disparity_index']}
     - Fairness Metrics: {data['fairness_metrics']}
     - Demographic Distribution: {data['demographic_distribution']}
-    - Mean BRCA1 Expression: {X_mean['brca1']:.3f}
-    - Mean BRCA2 Expression: {X_mean['brca2']:.3f}
-    - Benchmark Accuracy (TCGA-BRCA): {benchmark_accuracy}
+    - Benchmark Accuracy (TCGA-LUAD): {benchmark_accuracy}
     - Medical Guideline: {guideline}
     - Is Biased Dataset: {is_biased}
 
@@ -87,31 +83,36 @@ def get_insights_from_llm(data, X_mean, is_biased):
         print("❌ LLM ERROR:", str(e))
         return "Error generating insights. Please try again later."
 
-@app.post("/analyze")
+@app.post("/lung/analyze")
 async def analyze(file: UploadFile = File(...)):
     try:
         df = pd.read_csv(file.file)
         is_biased = "biased" in file.filename.lower()
         race_counts = df["race"].value_counts(dropna=False).to_dict() if "race" in df.columns else {}
+        cleaned_df, original_race = preprocess_data(df, target_column="cancer_subtype", ancestry_column="ancestry")
 
-        cleaned_df, original_race = preprocess_data(df, target_column="her2_status", ancestry_column="ancestry")
-        if "her2_status" not in cleaned_df.columns:
-            raise HTTPException(status_code=400, detail="No 'her2_status' column found.")
+        if "cancer_subtype" not in cleaned_df.columns:
+            raise HTTPException(status_code=400, detail="No 'cancer_subtype' column found.")
 
-        X = cleaned_df.drop(columns=["her2_status"])
-        y = cleaned_df["her2_status"]
-        X_mean = X[["brca1", "brca2"]].mean().to_dict()
+        X = cleaned_df.drop(columns=["cancer_subtype"])
+        y = cleaned_df["cancer_subtype"]
+        X_mean = X[["EGFR_mutation_status", "KRAS_mutation_status"]].mean().to_dict()
 
-        # Calculate true accuracy to adjust risk score
-        risk_scores = model.predict_proba(X)[:, 1]
-        avg_risk_score = float(np.mean(risk_scores))
+        # Calculate true accuracy to adjust subtype confidence
+        subtype_preds = model.predict(X)
+        true_accuracy = accuracy_score(y, subtype_preds)  # Overall accuracy
+
+        subtype_counts = pd.Series(subtype_preds).value_counts().to_dict()
+        subtype_labels = {0: "Adenocarcinoma", 1: "Squamous Cell", 2: "SCLC"}
+        subtype_dist = {subtype_labels.get(k, str(k)): v for k, v in subtype_counts.items()}
+
         if is_biased:
             # Simulate lower reliability due to bias (e.g., label noise reduces confidence)
-            true_accuracy = accuracy_score(y, model.predict(X))  # Overall accuracy
-            avg_risk_score *= true_accuracy  # Scale risk by accuracy
-            if avg_risk_score > 1.0: avg_risk_score = 1.0  # Cap at 1
-            elif avg_risk_score < 0.0: avg_risk_score = 0.0  # Floor at 0
-        risk_label = "High" if avg_risk_score > 0.5 else "Low"
+            for key in subtype_dist:
+                subtype_dist[key] *= true_accuracy  # Scale counts by accuracy
+            if true_accuracy < 0.5:  # Ensure stability
+                for key in subtype_dist:
+                    subtype_dist[key] = max(1, subtype_dist[key])  # Minimum 1 count
 
         y_pred = model.predict(X)
         fairness_metrics = {}
@@ -125,29 +126,21 @@ async def analyze(file: UploadFile = File(...)):
         disparity_index = float(max(accuracies) - min(accuracies)) if accuracies else 0.0
         if is_biased:
             # Amplify disparity to reflect bias severity
-            disparity_index *= 1.5  # Increase to 13.5% or higher
+            disparity_index *= 1.5  # Increase to ~0.195 or higher
 
         analysis_result = {
-            "risk_score": avg_risk_score,
-            "risk_label": risk_label,
-            "fairness_metrics": fairness_metrics,
+            "subtype_distribution": subtype_dist,
             "disparity_index": disparity_index,
+            "fairness_metrics": fairness_metrics,
             "demographic_distribution": race_counts,
-            "is_biased": is_biased
+            "is_biased": is_biased,
+            "overall_accuracy": true_accuracy  # Add for frontend confidence
         }
 
-        insights = get_insights_from_llm(analysis_result, X_mean, is_biased)
+        insights = get_insights_from_llm(analysis_result, is_biased)
         analysis_result["insights"] = insights
 
         return analysis_result
     except Exception as e:
         print("❌ ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/fairness")
-async def fairness():
-    return {
-        "overall_accuracy": 0.51,
-        "fairness_metrics": {"0": {"accuracy": 0.52, "count": 41}, "1": {"accuracy": 0.51, "count": 53}, "2": {"accuracy": 0.55, "count": 55}, "3": {"accuracy": 0.45, "count": 51}},
-        "disparity_index": 0.09
-    }

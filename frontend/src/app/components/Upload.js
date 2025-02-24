@@ -1,20 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import gsap from 'gsap-trial';
-import { Upload as UploadIcon, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import { Upload as UploadIcon, FileSpreadsheet, AlertCircle, Loader2 } from 'lucide-react';
+import { API_URL } from '../config';
 
 export default function Upload({ onComplete }) {
     const [file, setFile] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const [uploadComplete, setUploadComplete] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [processStep, setProcessStep] = useState('');
+    const [error, setError] = useState(null);
 
     const containerRef = useRef(null);
     const dropzoneRef = useRef(null);
-    const progressRef = useRef(null);
-    const checkmarkRef = useRef(null);
+    const loaderRef = useRef(null);
 
     useEffect(() => {
-        // Initial animations
         const ctx = gsap.context(() => {
             gsap.from(containerRef.current.querySelectorAll('.fade-in'), {
                 opacity: 0,
@@ -23,13 +23,8 @@ export default function Upload({ onComplete }) {
                 stagger: 0.1,
                 ease: 'power2.out'
             });
-
-            gsap.set(dropzoneRef.current, {
-                borderImage: 'linear-gradient(45deg, #a69eff, #dfdcff) 1',
-                scale: 1,
-            });
+            gsap.set(dropzoneRef.current, { scale: 1 });
         });
-
         return () => ctx.revert();
     }, []);
 
@@ -42,7 +37,13 @@ export default function Upload({ onComplete }) {
         });
     };
 
-    // ... (keep your existing event handlers)
+    const animateLoader = () => {
+        gsap.fromTo(loaderRef.current,
+            { rotate: 0 },
+            { rotate: 360, duration: 1, repeat: -1, ease: 'linear' }
+        );
+    };
+
     const handleDragOver = (e) => {
         e.preventDefault();
         if (!isDragging) {
@@ -63,6 +64,7 @@ export default function Upload({ onComplete }) {
         const droppedFile = e.dataTransfer.files[0];
         if (droppedFile) {
             setFile(droppedFile);
+            setError(null); // Reset error on new file
         }
     };
 
@@ -70,56 +72,59 @@ export default function Upload({ onComplete }) {
         const selectedFile = e.target.files[0];
         if (selectedFile) {
             setFile(selectedFile);
+            setError(null);
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!file) return;
-        setIsUploading(true);
 
-        gsap.timeline()
-            .to(progressRef.current, {
-                width: '100%',
-                duration: 2,
-                ease: 'power1.inOut'
-            })
-            .to(progressRef.current, {
-                opacity: 0,
-                duration: 0.3
-            })
-            .fromTo(
-                checkmarkRef.current,
-                { scale: 0, opacity: 0 },
-                {
-                    scale: 1,
-                    opacity: 1,
-                    duration: 0.5,
-                    ease: 'back.out(1.7)',
-                    onComplete: () => {
-                        setIsUploading(false);
-                        setUploadComplete(true);
-                        setTimeout(onComplete, 800);
-                    }
-                }
-            );
+        setIsProcessing(true);
+        setProcessStep('Preprocessing Data');
+        setError(null);
+        animateLoader();
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const isLungCancer = file.name.toLowerCase().includes("lung") || file.name.toLowerCase().includes("luad");
+        const endpoint = isLungCancer ? "http://localhost:8001/lung/analyze" : `${API_URL}/analyze`;
+
+        try {
+            setTimeout(() => setProcessStep('Analyzing with AI'), 1000);
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status} - ${await response.text()}`);
+            }
+
+            const data = await response.json();
+            onComplete(data, isLungCancer);
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            setError(`Upload failed: ${error.message}`);
+        } finally {
+            setIsProcessing(false);
+            setProcessStep('');
+        }
     };
 
     return (
         <div ref={containerRef} className="max-w-2xl mx-auto">
-            {/* Header Section */}
             <div className="mb-8 fade-in">
                 <h2 className="text-3xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
                     Upload Genomic Data
                 </h2>
                 <p className="text-gray-600 mb-4">
-                    Start your journey towards more equitable genetic insights by uploading your genomic data file.
+                    Start your journey towards equitable genetic insights.
                 </p>
             </div>
 
-            {/* File Upload Section */}
             <div className="space-y-6">
-                {/* Accepted Files Info */}
                 <div className="bg-blue-50 p-4 rounded-lg fade-in">
                     <h3 className="text-sm font-semibold text-blue-800 mb-2 flex items-center">
                         <FileSpreadsheet className="w-4 h-4 mr-2" />
@@ -127,105 +132,75 @@ export default function Upload({ onComplete }) {
                     </h3>
                     <ul className="text-sm text-blue-700 space-y-1">
                         <li>• CSV files with genomic variant data</li>
-                        <li>• Excel spreadsheets (.xlsx) with demographic information</li>
+                        <li>• Excel spreadsheets (.xlsx)</li>
                         <li>• Standard genetic data exports (.txt, .vcf)</li>
                     </ul>
                 </div>
 
-                {/* Upload Zone */}
                 <div
                     ref={dropzoneRef}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                     className="p-8 rounded-xl bg-white transition-all duration-300 relative border-4 border-dashed"
-                    style={{
-                        borderImage: 'linear-gradient(45deg, #4F46E5, #818CF8) 30',
-                        borderImageSlice: '1'
-                    }}
+                    style={{ borderImage: 'linear-gradient(45deg, #4F46E5, #818CF8) 30', borderImageSlice: '1' }}
                 >
                     <form onSubmit={handleSubmit} className="space-y-6 relative">
-                        <div className="text-center">
-                            <UploadIcon className="mx-auto h-12 w-12 text-indigo-600"/>
-                            <div className="mt-6">
-                                <label className="block text-xl font-semibold text-gray-900">
-                                    {file ? file.name : 'Drop your genomic data file here'}
-                                </label>
-                                <p className="mt-2 text-base text-gray-600">
-                                    {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'or select a file from your computer'}
-                                </p>
+                        {!isProcessing ? (
+                            <div className="text-center">
+                                <UploadIcon className="mx-auto h-12 w-12 text-indigo-600" />
                                 <div className="mt-6">
-                                    <input
-                                        type="file"
-                                        className="hidden"
-                                        onChange={handleFileChange}
-                                        id="file-upload"
-                                        accept=".csv,.xlsx,.txt,.vcf"
-                                    />
-                                    <label
-                                        htmlFor="file-upload"
-                                        className="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 cursor-pointer transition-colors"
-                                    >
-                                        Browse Files
+                                    <label className="block text-xl font-semibold text-gray-900">
+                                        {file ? file.name : 'Drop your genomic data file here'}
                                     </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {file && !isUploading && !uploadComplete && (
-                            <button
-                                type="submit"
-                                className="w-full py-4 px-6 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors text-lg font-medium"
-                            >
-                                Analyze Genomic Data
-                            </button>
-                        )}
-
-                        {isUploading && (
-                            <div className="relative pt-1">
-                                <div className="h-2 rounded-full bg-blue-100 overflow-hidden">
-                                    <div
-                                        ref={progressRef}
-                                        className="h-full w-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-300"
-                                    />
-                                </div>
-                                <p className="text-sm text-gray-500 mt-2 text-center">Processing your data...</p>
-                            </div>
-                        )}
-
-                        {uploadComplete && (
-                            <div className="flex flex-col items-center">
-                                <div ref={checkmarkRef}
-                                     className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
-                                    <svg
-                                        className="w-8 h-8 text-green-500"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth="2"
-                                            d="M5 13l4 4L19 7"
+                                    <p className="mt-2 text-base text-gray-600">
+                                        {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'or select a file'}
+                                    </p>
+                                    <div className="mt-6">
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            onChange={handleFileChange}
+                                            id="file-upload"
+                                            accept=".csv,.xlsx,.txt,.vcf"
                                         />
-                                    </svg>
+                                        <label
+                                            htmlFor="file-upload"
+                                            className="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 cursor-pointer transition-colors"
+                                        >
+                                            Browse Files
+                                        </label>
+                                    </div>
                                 </div>
-                                <p className="mt-3 text-green-600 font-medium">Upload Complete!</p>
-                                <p className="text-sm text-gray-500">Preparing your analysis...</p>
+                                {file && (
+                                    <button
+                                        type="submit"
+                                        className="w-full mt-6 py-4 px-6 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors text-lg font-medium"
+                                    >
+                                        Analyze Genomic Data
+                                    </button>
+                                )}
+                                {error && (
+                                    <p className="mt-4 text-red-600 text-center">{error}</p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-center">
+                                <Loader2 ref={loaderRef} className="mx-auto h-12 w-12 text-indigo-600 animate-spin" />
+                                <p className="mt-4 text-xl font-semibold text-gray-900">{processStep}</p>
+                                <p className="mt-2 text-base text-gray-600">Please wait while we process your data...</p>
                             </div>
                         )}
                     </form>
                 </div>
 
-                {/* Privacy Notice */}
                 <div className="bg-gray-50 p-4 rounded-lg fade-in">
                     <div className="flex items-start">
-                        <AlertCircle className="w-5 h-5 text-gray-600 mr-3 mt-0.5"/>
+                        <AlertCircle className="w-5 h-5 text-gray-600 mr-3 mt-0.5" />
                         <div>
                             <h3 className="text-sm font-semibold text-gray-800">Privacy & Data Usage</h3>
                             <p className="text-sm text-gray-600 mt-1">
-                                Your genetic data is analyzed securely and privately. We only use your data to provide personalized insights and identify potential biases in genetic predictions.
+                                Your data is analyzed securely and used only for personalized insights and equity analysis.
                             </p>
                         </div>
                     </div>

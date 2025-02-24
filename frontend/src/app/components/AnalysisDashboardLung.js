@@ -42,7 +42,7 @@ const InfoCard = ({ icon: Icon, title, value, subtext, isDark }) => (
     </div>
 );
 
-export default function AnalysisDashboard({ isDark, data, hasUploaded }) {
+export default function AnalysisDashboardLung({ isDark, data, hasUploaded }) {
     const [selectedInsight, setSelectedInsight] = useState(null);
     const textColor = isDark ? 'text-white' : 'text-gray-900';
     const subTextColor = isDark ? 'text-gray-300' : 'text-gray-600';
@@ -50,7 +50,7 @@ export default function AnalysisDashboard({ isDark, data, hasUploaded }) {
     const borderColor = isDark ? 'border-gray-700' : 'border-gray-200';
 
     const explanations = {
-        "Risk Score and Label": "The risk score (0-1) reflects the likelihood of HER2-positive breast cancer based on BRCA1/BRCA2 and ancestry.",
+        "Predicted Subtype Distribution": "Predicted likelihood of lung cancer subtypes (Adenocarcinoma, Squamous Cell, SCLC) based on EGFR/KRAS mutations.",
         "Disparity Index": "Measures variation in model accuracy across ancestry groups—lower is more equitable.",
         "Fairness Metrics": "Accuracy per ancestry group; disparities may indicate bias."
     };
@@ -65,18 +65,11 @@ export default function AnalysisDashboard({ isDark, data, hasUploaded }) {
     const demographicData = data?.demographic_distribution
         ? Object.entries(data.demographic_distribution).map(([group, count]) => ({ name: group, value: count }))
         : [];
-    const riskScore = data?.risk_score || 0;
-    const riskLabel = data?.risk_label || 'Low';
+    const subtypeDist = data?.subtype_distribution || {};
     const disparity = data?.disparity_index || 0;
     const confidenceScore = data?.is_biased ? (data.overall_accuracy || 0.7) * 100 : (1 - disparity) * 100;
 
-    const riskHistogramData = [
-        { range: '0.0 - 0.2', count: 15 },
-        { range: '0.2 - 0.4', count: 28 },
-        { range: '0.4 - 0.6', count: 42 },
-        { range: '0.6 - 0.8', count: 31 },
-        { range: '0.8 - 1.0', count: 14 }
-    ];
+    const subtypePieData = Object.entries(subtypeDist).map(([name, value]) => ({ name, value }));
 
     const radarData = fairnessData.map(item => {
         const precision = item.accuracy * (Math.random() * 0.2 + 0.9);
@@ -87,7 +80,7 @@ export default function AnalysisDashboard({ isDark, data, hasUploaded }) {
             Accuracy: (item.accuracy * 100).toFixed(2),
             Precision: (precision * 100).toFixed(2),
             Recall: (recall * 100).toFixed(2),
-            F1: (f1 * 100).toFixed(2)
+            F1: (f1 * 100).toFixed(2),
         };
     });
 
@@ -114,33 +107,33 @@ export default function AnalysisDashboard({ isDark, data, hasUploaded }) {
             <div className="container mx-auto px-4 max-w-7xl">
                 <div className="text-center mb-12">
                     <h2 className={`text-3xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600`}>
-                        GeneBridge Breast Cancer Analysis
+                        GeneBridge Lung Cancer Analysis
                     </h2>
                     <div className={`flex items-center gap-2 p-4 rounded-lg ${isDark ? 'bg-indigo-900/20' : 'bg-indigo-50'} border border-indigo-200`}>
                         <AlertCircle className="h-4 w-4" />
-                        <p className={subTextColor}>Personalized insights for HER2-positive risk.</p>
+                        <p className={subTextColor}>Personalized subtype predictions for lung cancer.</p>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <InfoCard icon={Activity} title="Risk Score" value={`${(riskScore * 100).toFixed(1)}%`} subtext="HER2-positive likelihood" isDark={isDark} />
-                    <InfoCard icon={Target} title="Risk Label" value={riskLabel} subtext="Current classification" isDark={isDark} />
+                    <InfoCard icon={Activity} title="Predicted Subtype" value={Object.keys(subtypeDist).join(", ")} subtext="Most common subtypes" isDark={isDark} />
+                    <InfoCard icon={Target} title="Sample Size" value={Object.values(subtypeDist).reduce((a, b) => a + b, 0)} subtext="Analyzed cases" isDark={isDark} />
                     <InfoCard icon={Users} title="Disparity Index" value={`${(disparity * 100).toFixed(1)}%`} subtext="Equity metric" isDark={isDark} />
-                    <InfoCard icon={Brain} title="Benchmark" value="85%" subtext="TCGA-BRCA Standard" isDark={isDark} />
+                    <InfoCard icon={Brain} title="Benchmark" value="82%" subtext="TCGA-LUAD Standard" isDark={isDark} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                     <Card className={`${cardBg} p-6 border ${borderColor}`}>
-                        <h3 className={`text-xl font-semibold mb-4 ${textColor}`}>Risk Score Distribution</h3>
+                        <h3 className={`text-xl font-semibold mb-4 ${textColor}`}>Subtype Distribution</h3>
                         <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={riskHistogramData}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="range" />
-                                    <YAxis />
+                                <PieChart>
+                                    <Pie data={subtypePieData} cx="50%" cy="50%" labelLine={false} outerRadius={80} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`} dataKey="value">
+                                        {subtypePieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                    </Pie>
                                     <Tooltip content={<CustomTooltip isDark={isDark} />} />
-                                    <Bar dataKey="count" fill="#34d399" />
-                                </BarChart>
+                                    <Legend />
+                                </PieChart>
                             </ResponsiveContainer>
                         </div>
                     </Card>
