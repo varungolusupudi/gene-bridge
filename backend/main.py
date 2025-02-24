@@ -9,7 +9,7 @@ from openai import OpenAI
 
 app = FastAPI()
 
-XAI_API_KEY = "xai-p8Ja9Kjg1lYhK072PT90rwNLet6NlluEVkmb7uqHjqTEEEoFV8yy4EBU5bsU4TwdLOVwoZa4xnzB29eG"
+XAI_API_KEY = "xai-blah-blah"
 
 app.add_middleware(
     CORSMiddleware,
